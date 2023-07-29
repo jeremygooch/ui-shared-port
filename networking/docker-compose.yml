@@ -1,0 +1,17 @@
+services:
+  nginx:
+    image: ui-dev-networking
+    volumes:
+      - ./configs/nginx.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - "5200:4200"
+      - "5201:4201"
+      - "5202:3000"
+      - "5203:3001"
+      - "5204:5173"
+      - "5205:5174"
+      - "5206:5175"
+      - "5207:5176"
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

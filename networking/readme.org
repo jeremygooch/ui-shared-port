@@ -1,0 +1,34 @@
+* UI Dev Networking / Nginx Reverse Proxy
+
+This project is to run multiple ui apps on seperate ports via a reverse proxy on port 80. Running on the same port is necessary for these apps since they use tools like =localStorage= to communcate information between themselves and this information cannot be communcated across different ports even on the same host. This means that only one app can be run at a time on a given port making development across apps tedious, slow and difficult to script away across all possible environments.
+
+Docker is used to setup an nginx reverse proxy that listens over to the following ports for specific apps:
+- 4200 / angular1
+- 4201 / angular2
+- 3000 / react1
+- 3001 / react2
+- 5173 / svelte1
+- 5174 / svelte2
+- 5176 / vue1
+- 5175 / vue2
+
+** Getting Started
+Run the script =ui-networking.sh= from this directory to start the proxy server. The following arguments can be passed to this script:
+ - ./ui-networking.sh
+   - Starts the proxy server if it is not running already
+ - ./ui-networking.sh --status
+   - Prints the status of the nginx container and image
+ - ./ui-networking.sh --pause
+   - Stops the container which can optionally be restarted by pressing <enter> after it has been stopped
+ - ./ui-networking.sh --resume
+   - Resumes a containter that has previously been stopped
+ - ./ui-networking.sh --destroy
+   - Stops and removes proxy server image completely.
+   - The image and container can be recreated again by simply running ui-networking.sh
+ - ./ui-networking.sh --rebuild
+   - Stops and removes proxy server image completely. Then automatically recreates them
+ - ./ui-networking.sh --help
+   - Prints the contents of this file
+
+** Troubleshooting
+ - If you get a blocked port when starting or restarting any of the UI builds, you can simply pause the server using the =--pause= command above, (re)build any UI apps, then resume the proxy server.
