@@ -1,6 +1,9 @@
-* Run multiple UI builds on the same port
-When working on multiple UI projects it's not uncommon to have each individual app running in a subfolder on a root domain. A simple setup might look like: 
+#+OPTIONS: toc:nil
+#+OPTIONS: num:nil
+#+OPTIONS: html-postamble:nil
 
+* Run multiple UI dev builds on the same port
+When working on multiple UI projects it's not uncommon to have each individual app running in a sub folder on a root domain. A simple setup might look like:
 #+begin_src mermaid :file ./assets/example-multi-ui-app-network-structure.png
 flowchart TD
     B{"http[s]://root-path/"}
@@ -14,41 +17,41 @@ flowchart TD
 #+RESULTS:
 [[file:./assets/example-multi-ui-app-network-structure.png]]
 
-This can present challenges when working locally and needing to share sensitive information between each app and develop on all apps simultaneously.
+This can present challenges when working locally and needing to share sensitive information between each app and develop across all apps simultaneously.
 
 Most UI frameworks that provide a local dev server for development will run on a standard port. The default for React (specifically Create React App) runs on port 3000, for Angular its port 4200, and both Vue and Svelte run on 5173 since both projects use the Vite for the dev server.
 
-Sensitive information like session storage or localStorage cannot be shared across ports. This can make local development across multiple UIs tricky if we don't have some higher level networking managing requests between each project. Fortunately setting up something like this is relatively simple using a tool like nginx.
+Sensitive information like session storage or local storage cannot be shared across ports. This can make local development across multiple UIs tricky if we don't have some higher level networking managing requests between each project. Fortunately setting up something like this is relatively simple using a tool like nginx.
 
-In this article we will cover configuring each UI framework to allow external access on their standard as well as custom ports. We will also setup a simple nginx reverse proxy in a portable Docker container that maps port 80 to each UI project. Lastly we will write a bash script that manages the docker build making it easy for other team members to run the container, pause, debug, resume and completely rebuild the container.
+In this article we will cover configuring each UI framework to allow external access on their standard as well as custom ports. We will also setup a simple nginx reverse proxy in a Docker container that maps port 80 to each UI project. Lastly we will write a bash script that manages the docker build making it easy for other team members to run the container, pause, debug, resume and completely rebuild the container.
 
 ** Following along and/or jumping ahead
 If you don't care about all the ins and outs of setting up the project, a github repository has been created [[https://github.com/jeremygooch/ui-shared-port][here]] that you can clone and use to get the final results. Although all the projects are contained within a shared folder along with the docker and nginx settings, there is no need to use this parent/sibling relationship between folders for your projects. Since we're mapping ports the projects can live in any directory on your system.
 
-If you're following along commit hashes have been included with each of the major steps. If you're unaware you can easily checkout a git commit hash just like you can any branch (=git checkout [hash]=) and explore the code from there.
+If you're following along commit hashes have been included with each of the major steps. You can easily checkout a git commit hash just like you can any branch (=git checkout [hash]=) and explore the code from there.
 
 ** Build base projects
-This is just a brief overview to setup each project; however, you can skip this step if you already have projects you would like to work from. This is not intended to be a comprehensive overview of each project or best practices, but instead just gives us a basic scaffolding we can use to manage requests between them.
+We will start with a brief project setup for each UI framework; however, you can skip this step if you already have projects you would like to work from. This is not intended to be a comprehensive overview of each project or best practices, but instead just gives us a basic scaffolding we can use to manage requests between them.
 
 On that note, we will be using =npm= for package management but feel free to use =yarn=, =pnpm= or any other dependency manager to suit your needs.
 
-Also, make sure you have docker and docker compose installed and running. Check https://docs.docker.com/ to get installation and setup instructions. Make sure you can run docker as a non root user. On Linux the steps can be found here: https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user
+Also, make sure you have docker and docker-compose installed. Check https://docs.docker.com/ to get installation and setup instructions. Make sure you can run docker as a non root user. On Linux the steps can be found here: https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user
 
 We will create 2 of each project so we can recreate the port collision scenario described above and how to handle it for each framework.
 
 *** Angular
-We will be following the guide outlined on angular.io. See this page: https://angular.io/guide/setup-local for any updates or changes to the project setup process.
+We will be following the guide outlined on https://angular.io. See https://angular.io/guide/setup-local for any updates or changes to the project setup process.
 
 1. Make sure you have the global angular cli installed by running =npm install -g @angular/cli=.
 2. Using the cli, setup a new project: =ng new angular-port-test-1=
-3. For this article I chose to add angular routing and scss. But feel free to use any settings you would like.
+3. For the repo on github I chose to add angular routing and scss which aren't really necessary so feel free to use any settings you would like.
 4. Delete the contents of ~src/app/app.component.html~ and replace them with =<h1>Hello from Angular Project 1</h1>=
 5. Repeat steps 2 through 4 to setup a duplicate project named =angular-port-test-2= and in ~app.component.html~ use the html =<h1>Hello from Angular Project 2</h1>= to differentiate the 2 projects.
 
 If you've cloned the repository to follow along checkout commit hash =8c3f3c5=.
 
 *** React
-We will be following the guide outlined on create-react-app.dev. See this page: https://create-react-app.dev/docs/getting-started for any updates or changes to the project setup process.
+We will be following the guide outlined on https://create-react-app.dev. See https://create-react-app.dev/docs/getting-started for any updates or changes to the project setup process.
 
 1. Run the command =npx create-react-app react-port-test-1=.
 2. Update the =return= statement in ~src/App.js~ to =return (<h1>Hello from React Project 1</h1>);=
@@ -59,7 +62,7 @@ If you're following along via git, checkout commit hash =d927999=.
 We will be following the guide outlined on svelte.dev. See this page: [[https://svelte.dev/docs/introduction][https://svelte.dev/docs/introduction]] for any updates or changes to the project setup process.
 
 1. Setup a new project by running =npm create svelte@latest svelte-port-test-1=
-2. For this article I chose the demo app with Typescript, ESLint and Prettier, but feel free to pick any setting you prefer.
+2. For this article I chose the demo app with Typescript, ESLint and Prettier, but feel free to pick any settings you prefer.
 3. Unlike React and Angular you must manually install the dependencies so =cd= into the project root and run =npm i=.
 4. Replace the contents of ~src/routes/+page.svelte~ with =<h1>Hello from Svelte Test 1</h1>=.
 5. Repeat steps 1 through 4 to setup a project named =svelte-port-test-2= and replace the contents of ~+page.svelte~ with =<h1>Hello from Svelte Test 2</h1>=.
@@ -81,7 +84,7 @@ If you've been following along via git, checkout commit hash =543da82=.
 ** Set custom ports per project, and update dev server settings
 Now that we have multiple projects to test against we can designate custom ports if need be. For our purposes this is necessary since we intentionally created apps that will try to run on the same port so we can illustrate how to get around this scenario in each framework. If you're running a small enough setup setting custom ports may not be necessary; however, you will need to adjust the dev server settings to ensure the projects can be accessed outside of their dev server port.
 
-Note, if you try to run a build on the same port that another build is running on you will get an occupied ports error. Most dev servers are smart enough to account for this and give you the option to select a different port at build time. However, we will designate a custom default port for each project.
+Note, if you try to run a build on the same port that another build is running on you will get an occupied ports error. Most dev servers are smart enough to account for this and give you the option to select a different port at build time. However, for some frameworks we will designate a custom default port for each project.
 
 Here is how our final project will look:
 #+begin_src mermaid :file ./assets/final-app-network-structure.png
@@ -102,14 +105,13 @@ flowchart TD
 
 *** Checking availability of ports
 To see if you have another service already running on a port (for example =4201=) run the following command =lsof -nP -i4TCP:4201 | grep LISTEN=. If you see output like the following another service is running on that port so be sure to pick a different port like =4202= or any other port you would like.
-
 #+begin_src bash
 jrm@jrm-Oryx-Pro:~/$ lsof -nP -i4TCP:4201 | grep LISTEN
 ng\x20ser 15003  jrm   21u  IPv4 115223      0t0  TCP 127.0.0.1:4201 (LISTEN)
 #+end_src
 
 *** Angular
-By default Angular runs on port =4200=, so we will update =angular-port-test-2= to run on port =4201=. If you have another service running on port =4201= you can choose any other unoccupied port, just remember to make note of it. See [[Checking availability of ports]] to test for unoccupied ports.
+By default Angular runs on port =4200=, so we will update =angular-port-test-2= to run on port =4201=. If you have another service running on port =4201= you can choose any other unoccupied port, just remember to make note of it. See section "[[Checking availability of ports]]" to test for unoccupied ports.
 
 We need to set the =baseHref= for both angular project's dev server settings. Here we will specify the port as well as localhost for the root url. In =angular-port-test-[number]/angular.json= under the =architect > configurations > development= section, add a line for =baseHref=. For instance in =angular-port-test-2= this setting should look like:
 
@@ -125,7 +127,7 @@ We need to set the =baseHref= for both angular project's dev server settings. He
                "vendorChunk": true,
 #+end_src
 
-In =angular-port-test-1/angular.json= make sure the port is =4200=.
+In =angular-port-test-1/angular.json= make the same change but the port should be =4200=.
 
 Then in package.json, update the "start" script to run on localhost with port 4201 and disable host check so websockets will function normally. In =angular-port-test-2= this change will look like:
 
@@ -156,7 +158,7 @@ In =angular-port-test-1= this setting will look like:
      "test": "ng test"
 #+end_src
 
-Next we will need to ensure our app is aware that it should be running in a subfolder, which is easy enough to do by updating the =index.html='s base ref tag:
+Next we will need to ensure our app is aware that it should be running in a sub folder, which is easy enough to do by updating the =index.html='s base ref tag:
 #+name: angular-port-test-2/src/index.html
 #+begin_src diff
 @@ -3,7 +3,7 @@
@@ -188,7 +190,7 @@ In a dedicated terminal start the =angular-port-test-1= app with =npm start= and
 If you've been following along in git, checkout commit hash =8bf6c88=.
 
 *** React
-Setting up react for external access on a unique port at a given subfolder is relatively simple. Just create a =.env= file in the root of each react project and update its contents to the following:
+Setting up react for external access on a unique port at a given sub folder is relatively simple. Just create a =.env= file in the root of each react project and update its contents to the following for =react-port-test-1/.env= and =react-port-test-2/.env= respectively:
 
 #+name: react-port-test-1/.env
 #+begin_src diff
@@ -204,7 +206,7 @@ Setting up react for external access on a unique port at a given subfolder is re
 +PUBLIC_URL=react2
 #+end_src
 
-As you can see we'll be using ports 3000 and 3001 for each react app. Again, reference [[Checking availability of ports]] to make sure that each port is available. If you prefer to use a different port for either project, update the =PORT= setting in the =.env= file and make a note of it for later nginx configuration.
+As you can see we'll be using ports 3000 and 3001 for each react app. Again, reference "[[Checking availability of ports]]" to make sure that each port is available. If you prefer to use a different port for either project, update the =PORT= setting in the =.env= file and make a note of it for later nginx configuration.
 
 In a dedicated terminal start the =react-port-test-1= app with =npm start= and in another terminal start the =react-port-test-2= also with =npm start=. You should not run into any port conflicts and you should see a welcome message at http://localhost:3000/ and http://localhost:3001/ in your browser.
 
@@ -272,7 +274,7 @@ In a dedicated terminal start the =svelte-port-test-1= app with =npm run dev= an
 If you've been following along in git, checkout commit hash =bcf948e=.
 
 *** Vue
-Since Vue also uses Vite for it's dev server the steps to customize the port, subfolder and allow external access will be similar to Svelte.
+Since Vue also uses Vite for it's dev server the steps to customize the port, sub folder and allow external access will be similar to Svelte.
 
 Update the =package.json= file in the root of each project to look like:
 #+name: vue-port-test-1/package.json
@@ -560,32 +562,31 @@ Create a new folder to hold the docker and nginx config files. We'll just call o
 
 In this folder create a new =docker-compose.yml= file with the following contents:
 #+name: networking/docker-compose.yml
-#+begin_src diff
-@@ -0,0 +1,17 @@
-+services:
-+  nginx:
-+    image: ui-dev-networking
-+    volumes:
-+      - ./configs/nginx.conf:/etc/nginx/conf.d/default.conf
-+    ports:
-+      - "5200:4200"
-+      - "5201:4201"
-+      - "5202:3000"
-+      - "5203:3001"
-+      - "5204:5173"
-+      - "5205:5174"
-+      - "5206:5175"
-+      - "5207:5176"
-+      - "80:80"
-+    extra_hosts:
-+      - "host.docker.internal:host-gateway"
+#+begin_src yaml
+  services:
+    nginx:
+      image: ui-dev-networking
+      volumes:
+        - ./configs/nginx.conf:/etc/nginx/conf.d/default.conf
+      ports:
+        - "5200:4200"
+        - "5201:4201"
+        - "5202:3000"
+        - "5203:3001"
+        - "5204:5173"
+        - "5205:5174"
+        - "5206:5175"
+        - "5207:5176"
+        - "80:80"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
 #+end_src
 
 Notice we're mapping port 80 in the docker container to port 80 on our host system. The other app ports we're mapping to arbitrary ports in the docker container.
 
 We're also copying a config file that we haven't created yet, so let's create that next.
 
-Create a =configs= subfolder under =networking= and add the following files that we'll add contents to next:
+Create a =configs= sub folder under =networking= and add the following files that we'll add contents to next:
 #+begin_example
 configs/
  - 502.html
@@ -595,113 +596,110 @@ configs/
 
 In =nginx.conf= add the following contents:
 #+name: networking/configs/nginx.conf
-#+begin_src diff
-@@ -0,0 +1,41 @@
-+server{
-+  listen 80;
-+
-+  location /angular1 {
-+    proxy_pass http://host.docker.internal:4200;
-+  }
-+
-+  location /angular2 {
-+    proxy_pass http://host.docker.internal:4201;
-+  }
-+
-+  location /react1 {
-+    proxy_pass http://host.docker.internal:3000;
-+  }
-+
-+  location /react2 {
-+    proxy_pass http://host.docker.internal:3001;
-+  }
-+
-+  location /svelte1 {
-+    proxy_pass http://host.docker.internal:5173;
-+  }
-+
-+  location /svelte2 {
-+    proxy_pass http://host.docker.internal:5174;
-+  }
-+
-+  location /vue2 {
-+    proxy_pass http://host.docker.internal:5175;
-+  }
-+
-+  location /vue1 {
-+    proxy_pass http://host.docker.internal:5176;
-+  }
-+
-+  error_page 502 /502.html;
-+
-+  location = /502.html {
-+    root  /etc/nginx;
-+  }
-+}
+#+begin_src conf
+  server{
+    listen 80;
+
+    location /angular1 {
+      proxy_pass http://host.docker.internal:4200;
+    }
+
+    location /angular2 {
+      proxy_pass http://host.docker.internal:4201;
+    }
+
+    location /react1 {
+      proxy_pass http://host.docker.internal:3000;
+    }
+
+    location /react2 {
+      proxy_pass http://host.docker.internal:3001;
+    }
+
+    location /svelte1 {
+      proxy_pass http://host.docker.internal:5173;
+    }
+
+    location /svelte2 {
+      proxy_pass http://host.docker.internal:5174;
+    }
+
+    location /vue2 {
+      proxy_pass http://host.docker.internal:5175;
+    }
+
+    location /vue1 {
+      proxy_pass http://host.docker.internal:5176;
+    }
+
+    error_page 502 /502.html;
+
+    location = /502.html {
+      root  /etc/nginx;
+    }
+  }
 #+end_src
 
-We're telling nginx to listen on port 80 and using the =proxy_pass= directive to pass requests at given locations to ports on our host system. The =location= attribute must match the baseUrl/subfolder paths that we setup earlier for each of our projects.
+We're telling nginx to listen on port 80 and using the =proxy_pass= directive to pass requests at given locations to ports on our host system. The =location= attribute must match the baseUrl/sub folder paths that we setup earlier for each of our projects.
 
 We're also specifying a custom 502 page. This page will be served if we try to go to one of our routes but our app is not yet running. This is helpful if you reboot or otherwise stop any local services and forget to restart. Let's create that =502.html= page now.
 
 #+name: networking/configs/502.html
-#+begin_src diff
-@@ -0,0 +1,31 @@
-+<!doctype html>
-+<html lang="en">
-+    <head>
-+        <meta charset="UTF-8"/>
-+        <title>Local UI Development</title>
-+        <style>
-+         body { font-family: Sans-Serif; }
-+         ul {
-+             width: fit-content;
-+             block-size: fit-content;
-+             margin: 3rem auto 0;
-+         }
-+         li { margin: 0.25rem 0; }
-+        </style>
-+    </head>
-+    <body>
-+        <center><h1>This UI App is not currently running</h1></center>
-+        <hr><center>Make sure the app is running locally with <strong>npm start</strong></center>
-+        <ul>
-+            <li><a href="http://localhost/angular1">Angular 1 App</a></li>
-+            <li><a href="http://localhost/angular2">Angular 2 App</a></li>
-+            <li><a href="http://localhost/react1">React 1 App</a></li>
-+            <li><a href="http://localhost/react2">React 2 App</a></li>
-+            <li><a href="http://localhost/svelte1">Svelte 1 App</a></li>
-+            <li><a href="http://localhost/svelte2">Svelte 2 App</a></li>
-+            <li><a href="http://localhost/vue2">Vue 2 App</a></li>
-+            <li><a href="http://localhost/admin">Admin UI</a></li>
-+            <li><a href="http://localhost/review">Review UI</a></li>
-+        </ul>
-+    </body>
-+</html>
+#+begin_src html
+  <!doctype html>
+  <html lang="en">
+      <head>
+          <meta charset="UTF-8"/>
+          <title>Local UI Development</title>
+          <style>
+           body { font-family: Sans-Serif; }
+           ul {
+               width: fit-content;
+               block-size: fit-content;
+               margin: 3rem auto 0;
+           }
+           li { margin: 0.25rem 0; }
+          </style>
+      </head>
+      <body>
+          <center><h1>This UI App is not currently running</h1></center>
+          <hr><center>Make sure the app is running locally with <strong>npm start</strong></center>
+          <ul>
+              <li><a href="http://localhost/angular1">Angular 1 App</a></li>
+              <li><a href="http://localhost/angular2">Angular 2 App</a></li>
+              <li><a href="http://localhost/react1">React 1 App</a></li>
+              <li><a href="http://localhost/react2">React 2 App</a></li>
+              <li><a href="http://localhost/svelte1">Svelte 1 App</a></li>
+              <li><a href="http://localhost/svelte2">Svelte 2 App</a></li>
+              <li><a href="http://localhost/vue2">Vue 2 App</a></li>
+              <li><a href="http://localhost/admin">Admin UI</a></li>
+              <li><a href="http://localhost/review">Review UI</a></li>
+          </ul>
+      </body>
+  </html>
 #+end_src
 
 The contents of this file include minimal styling and links to each of the apps that we've setup in this project. This is just a helper to quickly get a dev to any app that they may prefer to go to if the one they're currently on is not running.
 
 The last thing we need to create in this directory is a shell script to just start nginx. If we need to start any other services we can simply add them to this script as it will be run as the last step in our =Dockerfile=.
 #+name: networking/configs/start-nginx.sh
-#+begin_src diff
-@@ -0,0 +1,3 @@
-+#!/bin/bash
-+
-+nginx -g 'daemon off;'
+#+begin_src bash
+  #!/bin/bash
+
+  nginx -g 'daemon off;'
 #+end_src
 
 Next, let's create that =Dockerfile=. In the root of networking, create a =Dockerfile= and add the following contents to it:
 #+name: networking/Dockerfile
-#+begin_src diff
+#+begin_src 
 @@ -0,0 +1,7 @@
-+FROM nginx
-+
-+COPY ./configs/502.html /etc/nginx/502.html
-+COPY ./configs/start-nginx.sh /start-nginx.sh
-+
-+ENTRYPOINT /start-nginx.sh
-+# ENTRYPOINT ["tail", "-f", "/dev/null"]
+FROM nginx
+
+COPY ./configs/502.html /etc/nginx/502.html
+COPY ./configs/start-nginx.sh /start-nginx.sh
+
+ENTRYPOINT /start-nginx.sh
+# ENTRYPOINT ["tail", "-f", "/dev/null"]
 #+end_src
 
 I usually leave a commented out line at the bottom of the docker file in case I run into issues with the container exiting immediately due to an error or no final service running. Basically, I comment out the =start-nginx.sh= line and uncomment the last line, then can get into the container with =docker exec -it <container id> /bin/bash=. For now, we'll leave everything the way it is.
@@ -711,96 +709,95 @@ Lastly, we'll create a bash script that can create, pause, resume, destroy, and 
 
 Create a new file called =ui-networking.sh= file under the =networking= folder and make sure it has executable permissions (=chmod +x=). In the file add the following contents:
 #+name: networking/ui-networking.sh
-#+begin_src diff
-@@ -0,0 +1,83 @@
-+#!/bin/bash
-+
-+destroy=false
-+rebuild=false
-+pause=false
-+resume=false
-+status=false
-+help=false
-+
-+processed=false
-+
-+while (( $# >= 1 )); do
-+    case $1 in
-+	--destroy) destroy=true;;
-+	--rebuild) rebuild=true;;
-+	--resume) resume=true;;
-+	--pause) pause=true;;
-+	--status) status=true;;
-+	--help) help=true;;
-+	*) break;
-+    esac;
-+    shift
-+done
-+
-+if $help; then
-+    processed=true;
-+    cat readme.org
-+fi
-+
-+if $status; then
-+    processed=true;
-+    containerId="$(docker ps -a -q --filter ancestor=ui-dev-networking --format="{{.ID}}")"
-+    containerStatus="$(docker inspect -f '{{.State.Status}}' $containerId)"
-+    echo "CONTAINER STATUS: [$containerStatus]"
-+    echo
-+    docker ps -a --filter ancestor=ui-dev-networking
-+    echo
-+    echo "IMAGE STATUS"
-+    docker images ui-dev-networking
-+fi
-+
-+if [[ $destroy == true || $rebuild == true ]]; then
-+    processed=true
-+    container="$(docker ps -a -q --filter ancestor=ui-dev-networking --format="{{.ID}}")"
-+    echo "Stopping ui-dev-networking container ${container}..."
-+    docker container stop $container
-+    echo "Cleaning up images"
-+    docker rm $container
-+    docker rmi ui-dev-networking
-+    docker images prune
-+
-+    if $rebuild; then
-+	echo "Building base image"
-+	docker build -t ui-dev-networking .
-+	docker compose up -d
-+    fi
-+fi
-+
-+if $pause; then
-+    processed=true;
-+    echo "Stopping container"
-+    docker compose kill
-+    echo "You can now run any builds with no ports blocked. Press <enter> when you would like to resume the container"
-+    read $continue
-+    docker compose up -d
-+fi
-+
-+if $resume; then
-+    processed=true;
-+    echo "Resuming container"
-+    docker compose up -d
-+fi
-+
-+
-+if [[ $processed == false ]]; then
-+    if [[ "$(docker image inspect ui-dev-networking:latest 2> /dev/null)" == [] ]]; then
-+	echo "Building base image"
-+	docker build -t ui-dev-networking .
-+	docker compose up -d
-+    else
-+	echo "Container is already running"
-+    fi
-+fi
+#+begin_src bash
+  #!/bin/bash
+
+  destroy=false
+  rebuild=false
+  pause=false
+  resume=false
+  status=false
+  help=false
+
+  processed=false
+
+  while (( $# >= 1 )); do
+      case $1 in
+          --destroy) destroy=true;;
+          --rebuild) rebuild=true;;
+          --resume) resume=true;;
+          --pause) pause=true;;
+          --status) status=true;;
+          --help) help=true;;
+          ,*) break;
+      esac;
+      shift
+  done
+
+  if $help; then
+      processed=true;
+      cat readme.org
+  fi
+
+  if $status; then
+      processed=true;
+      containerId="$(docker ps -a -q --filter ancestor=ui-dev-networking --format="{{.ID}}")"
+      containerStatus="$(docker inspect -f '{{.State.Status}}' $containerId)"
+      echo "CONTAINER STATUS: [$containerStatus]"
+      echo
+      docker ps -a --filter ancestor=ui-dev-networking
+      echo
+      echo "IMAGE STATUS"
+      docker images ui-dev-networking
+  fi
+
+  if [[ $destroy == true || $rebuild == true ]]; then
+      processed=true
+      container="$(docker ps -a -q --filter ancestor=ui-dev-networking --format="{{.ID}}")"
+      echo "Stopping ui-dev-networking container ${container}..."
+      docker container stop $container
+      echo "Cleaning up images"
+      docker rm $container
+      docker rmi ui-dev-networking
+      docker images prune
+
+      if $rebuild; then
+          echo "Building base image"
+          docker build -t ui-dev-networking .
+          docker compose up -d
+      fi
+  fi
+
+  if $pause; then
+      processed=true;
+      echo "Stopping container"
+      docker compose kill
+      echo "You can now run any builds with no ports blocked. Press <enter> when you would like to resume the container"
+      read $continue
+      docker compose up -d
+  fi
+
+  if $resume; then
+      processed=true;
+      echo "Resuming container"
+      docker compose up -d
+  fi
+
+
+  if [[ $processed == false ]]; then
+      if [[ "$(docker image inspect ui-dev-networking:latest 2> /dev/null)" == [] ]]; then
+          echo "Building base image"
+          docker build -t ui-dev-networking .
+          docker compose up -d
+      else
+          echo "Container is already running"
+      fi
+  fi
 #+end_src
 
 You'll notice that the help command is looking for our readme. I went with [[https://orgmode.org/quickstart.html][org-mode markdown]] instead of the more common =md= format. =Org= provides many advantages to standard markdown, and is much easier to read in plain text IMO. However, if you and/or your team prefers markdown feel free to switch to that format.
 
-The contents of this file are pretty lengthy to include here, so just grab the file contents from the repository [[https://github.com/jeremygooch/ui-shared-port/blob/main/networking/readme.org][here]].
+The contents of this file are plain text can just be pulled from the repository [[https://github.com/jeremygooch/ui-shared-port/blob/main/networking/readme.org][here]].
 
 If you've been following along in git, checkout commit hash =12ee706=.
 
@@ -842,8 +839,8 @@ Other helpful commands for the =./ui-networking.sh= script are =--pause= which w
 Once the container is running properly you can visit: http://localhost/angular1 in your browser to set the sensitive data. If you then navigate to http://localhost/angular2 in the same tab you can now see that this app can render the contents of both local and session storage. Note, due to the security policies, localStorage data can be accessed if you open any of the other app urls (i.e. http://localhost/react1) in a new tab, but [[https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage][session storage will not be]]. Session storage requires the apps in the same tab.
 
 ** Final Thoughts
-While the purpose of this exercise was to setup the various UI frameworks and see how they can all be configured for our purposes you likely won't need to run so many UI apps simultaneously. However, if you find yourself needing to start a lot of apps you might benefit from some simple automation for starting up everything.
+While the goal of this exercise was to setup the various UI frameworks and see how they can all be configured for our purposes you likely won't need to run so many UI apps simultaneously. However, if you find yourself needing to start a lot of apps you might benefit from some simple automation for starting up everything.
 
 I will try to include a post in the future for how I achieve this in my editor of choice to start any of the several UI apps from a custom menu which starts a dedicated shell, sets the node/npm version and starts up the app from the correct location. I find it easier if I can just do this from my editor so I never have to leave my code nor remember what all the commands and npm versions are.
 
-
+Hopefully this can help make your life easier when doing local UI development. And as always, happy coding!
